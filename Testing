@@ -1,0 +1,188 @@
+import machine
+import time
+import dht
+import neopixel
+import ssd1306
+from machine import Pin, PWM, I2C
+from servo import Servo
+from mfrc522 import MFRC522
+
+# Pin Configuration
+TEMP_HUMIDITY_PIN = 17
+LED_PIN = 12
+STEAM_PIN = 34
+FAN_PINS = [18, 19]
+PIR_PIN = 14
+LEFT_BUTTON_PIN = 16
+RIGHT_BUTTON_PIN = 27
+GAS_SENSOR_PIN = 23
+BUZZER_PIN = 25
+WINDOW_SERVO_PIN = 5
+DOORS_SERVO_PIN = 13
+RGB_LED_PIN = 26
+I2C_SCL = 22
+I2C_SDA = 21
+
+# Initialize Temperature & Humidity Sensor (DHT11/DHT22)
+dht_sensor = dht.DHT11(Pin(TEMP_HUMIDITY_PIN))
+
+# Initialize LED
+led = Pin(LED_PIN, Pin.OUT)
+
+# Initialize Steam
+steam = Pin(STEAM_PIN, Pin.OUT)
+
+# Initialize Fan (using two pins)
+fans = [Pin(pin, Pin.OUT) for pin in FAN_PINS]
+
+# Initialize PIR Motion Sensor
+pir = Pin(PIR_PIN, Pin.IN)
+
+# Initialize Gas Sensor
+gas_sensor = Pin(GAS_SENSOR_PIN, Pin.IN)
+
+# Initialize Buzzer
+buzzer = Pin(BUZZER_PIN, Pin.OUT)
+
+# Initialize Buttons
+left_button = Pin(LEFT_BUTTON_PIN, Pin.IN, Pin.PULL_UP)
+right_button = Pin(RIGHT_BUTTON_PIN, Pin.IN, Pin.PULL_UP)
+
+# Initialize Servos (for Window & Door)
+window_servo = Servo(WINDOW_SERVO_PIN)
+door_servo = Servo(DOORS_SERVO_PIN)
+
+# Initialize WS2812 RGB LED Strip
+rgb_led = neopixel.NeoPixel(Pin(RGB_LED_PIN, Pin.OUT), 8)  # 8 LEDs
+
+# Initialize I2C (for LCD & RFID)
+i2c = I2C(0, scl=Pin(I2C_SCL), sda=Pin(I2C_SDA))
+
+# Initialize LCD Display (128x64 OLED)
+lcd = ssd1306.SSD1306_I2C(128, 64, i2c)
+
+# Initialize RFID
+rfid = MFRC522(22, 21)  # Uses I2C Pins
+
+def read_temp_humidity():
+    try:
+        dht_sensor.measure()
+        temp = dht_sensor.temperature()
+        humidity = dht_sensor.humidity()
+        print(f"Temperature: {temp}°C, Humidity: {humidity}%")
+        return temp, humidity
+    except Exception as e:
+        print("DHT Sensor Error:", e)
+        return None, None
+
+def test_led():
+    led.value(1)
+    time.sleep(1)
+    led.value(0)
+
+def test_fan():
+    for fan in fans:
+        fan.value(1)
+    time.sleep(2)
+    for fan in fans:
+        fan.value(0)
+
+def test_steam():
+    steam.value(1)
+    time.sleep(1)
+    steam.value(0)
+
+def test_rgb():
+    for i in range(8):
+        rgb_led[i] = (255, 0, 0)  # Red
+    rgb_led.write()
+    time.sleep(1)
+    for i in range(8):
+        rgb_led[i] = (0, 255, 0)  # Green
+    rgb_led.write()
+    time.sleep(1)
+    for i in range(8):
+        rgb_led[i] = (0, 0, 255)  # Blue
+    rgb_led.write()
+    time.sleep(1)
+    for i in range(8):
+        rgb_led[i] = (0, 0, 0)  # Off
+    rgb_led.write()
+
+def test_servo():
+    print("Opening Window")
+    window_servo.move(90)
+    time.sleep(2)
+    print("Closing Window")
+    window_servo.move(0)
+    time.sleep(2)
+    
+    print("Opening Door")
+    door_servo.move(90)
+    time.sleep(2)
+    print("Closing Door")
+    door_servo.move(0)
+
+def test_pir():
+    motion = pir.value()
+    print("Motion Detected!" if motion else "No Motion")
+    return motion
+
+def test_gas():
+    gas_detected = gas_sensor.value()
+    print("Gas Leak Detected!" if gas_detected else "No Gas Leak")
+    return gas_detected
+
+def test_buttons():
+    print("Left Button Pressed!" if not left_button.value() else "Left Button Not Pressed")
+    print("Right Button Pressed!" if not right_button.value() else "Right Button Not Pressed")
+
+def test_buzzer():
+    buzzer.value(1)
+    time.sleep(1)
+    buzzer.value(0)
+
+def test_rfid():
+    print("Waiting for RFID...")
+    while True:
+        rfid.init()
+        (status, tag_type) = rfid.request(rfid.REQIDL)
+        if status == rfid.OK:
+            (status, uid) = rfid.anticoll()
+            if status == rfid.OK:
+                uid_str = "-".join([str(i) for i in uid])
+                print(f"RFID Tag Detected: {uid_str}")
+                return uid_str
+        time.sleep(1)
+
+def update_lcd():
+    temp, humidity = read_temp_humidity()
+    motion = test_pir()
+    gas = test_gas()
+
+    lcd.fill(0)
+    lcd.text(f"Temp: {temp}C", 0, 0)
+    lcd.text(f"Humidity: {humidity}%", 0, 10)
+    lcd.text(f"Motion: {'Yes' if motion else 'No'}", 0, 20)
+    lcd.text(f"Gas: {'Yes' if gas else 'No'}", 0, 30)
+    lcd.show()
+
+# Main Test Execution
+def main():
+    while True:
+        read_temp_humidity()
+        test_led()
+        test_fan()
+        test_steam()
+        test_rgb()
+        test_servo()
+        test_pir()
+        test_gas()
+        test_buttons()
+        test_buzzer()
+        update_lcd()
+        time.sleep(5)  # Wait before the next cycle
+
+# Run the test script
+main()
+
